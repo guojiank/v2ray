@@ -1,20 +1,42 @@
 #!/usr/bin/env bash
 
-set -e
-
 PORT=33
-VERSION=v5.1.0
+VERSION=v4.22.0
 
 ufw disable
 mkdir /opt/v2ray -p
-mkdir /usr/local/etc/v2ray -p
 
-cd /opt/v2ray
+cd /opt/v2ray || exit 1
+
+rm -rf /opt/v2ray/*
 wget -nv -c https://github.com/v2fly/v2ray-core/releases/download/$VERSION/v2ray-linux-64.zip
-unzip -f v2ray-linux-64
-cp -r /opt/v2ray/systemd/system/* /etc/systemd/system/
+unzip  v2ray-linux-64
 
-cat >/usr/local/etc/v2ray/config.json<<EOF
+cat >/etc/systemd/system/v2ray.servie <<EOF
+[Unit]
+Description=V2Ray Service
+After=network.target
+Wants=network.target
+
+[Service]
+# This service runs as root. You may consider to run it as another user for security concerns.
+# By uncommenting the following two lines, this service will run as user v2ray/v2ray.
+# More discussion at https://github.com/v2ray/v2ray-core/issues/1011
+# User=v2ray
+# Group=v2ray
+Type=simple
+PIDFile=/run/v2ray.pid
+ExecStart=/opt/v2ray/v2ray-linux-64/v2ray -config /etc/v2ray/config.json
+Restart=on-failure
+# Don't restart in the case of configuration error
+RestartPreventExitStatus=23
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+mkdir -p /etc/v2ray
+cat >/etc/v2ray/config.json<<EOF
 {
   "log": {
     "loglevel": "debug"
@@ -57,9 +79,6 @@ cat >/usr/local/etc/v2ray/config.json<<EOF
   ]
 }
 EOF
-
-[ -f /usr/local/bin/v2ray ] && rm -f /usr/local/bin/v2ray
-ln -s /opt/v2ray/v2ray /usr/local/bin/v2ray
 
 systemctl daemon-reload
 systemctl restart v2ray
